@@ -3,11 +3,12 @@
 #include <thread>
 #include <time.h>
 #include <stdlib.h>
+#include <omp.h>
 using namespace std;
 //NON-Recursive Version of TSP
 
 //number of nodes (including node 0) (n > 1)
-const int n = 7;
+const int n = 4;
 
 //Matrix in textbook
 /*	int adjMat[n][n] = {
@@ -36,7 +37,11 @@ int DFS(int adjMat[n][n], vector<vector<int>> comList, int i) {
 
 
 int main() {
-	srand(time(NULL));
+	#pragma omp parallel
+	int tid = omp_get_thread_num();
+	int nthreads = omp_get_num_threads();
+	cout << tid << " of " << nthreads << endl;
+	srand(150);
 
 	int adjMat[n][n];
 	for (int i = 0; i < n; i++) {
@@ -48,10 +53,9 @@ int main() {
 		}
 	}
 
-
-
 	clock_t begin = clock();
 	//calculate amount of different combos in TSP (n! number of iterations)
+
 	int iters = 1;
 	for (int i = 1; i < n; i++) {
 		iters *= i;
@@ -61,12 +65,12 @@ int main() {
 	vector<vector<int>> comList(iters);
 
 
-	//Different Combos 
+	//Different Combinations 
 	for (int i = 1; i < n; i++) {
 		com(comList, i, iters);
 	}
 
-	//Push 0 in the front and back of list
+	//Push 0 in the front and back of list (we want to leave and reeneter the 0th node)
 	for (unsigned int i = 0; i < comList.size(); i++) {
 		vector<int>::iterator it = comList[i].begin();
 		comList[i].insert(it, 0);
