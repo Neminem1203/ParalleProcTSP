@@ -43,8 +43,9 @@ int main() {
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	int world_rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-	int *sums = (int *)malloc(sizeof(float) * world_size);
-	char processor_name[MPI_MAX_PROCESSOR_NAME];
+	int *sums = (int *)malloc(sizeof(int) * world_size);
+	vector<int> *paths = (vector<int> *)malloc(sizeof(vector<int>) * world_size);
+	MPI_Comm comm;
 	srand(150);
 
 	int adjMat[n][n];
@@ -66,7 +67,7 @@ int main() {
 	clock_t begin = clock();
 	vector<int> shortestPath;
 	int smallestSum = std::numeric_limits<int>::max(); //max int value
-	int *sum;
+	int sum;
 #pragma omp parallel private(nthreads, tid)
 	{
 		tid = omp_get_thread_num();
@@ -107,30 +108,45 @@ int main() {
 
 		for (unsigned int i = (nthreads * world_rank) + tid ; i < comList.size(); i += (nthreads * world_size)) {
 			//adjancecy matrix, combo list, iteration in combo list,
-			*sum = DFS(adjMat, comList, i);
+			sum = DFS(adjMat, comList, i);
 			/*
 			for (unsigned int x = 0; x < comList[i].size(); x++) {
 			cout << comList[i][x] << ", ";
 			}
 			cout << "\tSum: " << sum << endl;*/
-			if (smallestSum > *sum) {
-				smallestSum = *sum;
+			if (smallestSum > sum) {
+				smallestSum = sum;
 				shortestPath = comList[i];
 			}
 		}
 		printf("Thread %d of %d completed\n", tid, nthreads);
 	}
+	MPI_Gather(&sums, 1, MPI_INT, &smallestSum, 1, MPI_INT, MPI_COMM_WORLD,comm);
+	int lowest = std::numeric_limits<int>::max();
+	if (world_rank == 0) {
+		int sumOfAll = std::numeric_limits<int>::max(); //max int value
+		
+		for (int i = 0; i < world_rank; i++) {
+			//TODO: Check if sumOfAll > sum[i] and then make 
+			if (sums[i] < sumOfAll) {
+				lowest = i;
+				sumOfAll = sums[i];
+			}
+		}
+
+	cout << "\nLowest Sum: " << sumOfAll << endl;;
+	}
+	if(world_rank == lowest){
 	cout << "Shortest Path: ";
 	for (unsigned int i = 0; i < shortestPath.size(); i++) {
 		cout << shortestPath[i] << ", ";
 	}
-	MPI_Gather(&sums, 1, MPI_INT, sum, 1, MPI_INT, MPI_COMM_WORLD);
+	}
 
-
-	MPI_Finalize();
-	cout << "\nSum: " << smallestSum << endl;;
 	clock_t end = clock();
 	cout << "Clock: " << ((float)(end - begin) / CLOCKS_PER_SEC) << endl;
+
+	MPI_Finalize();
 	cin.ignore();
 	//Pause
 	return 0;
