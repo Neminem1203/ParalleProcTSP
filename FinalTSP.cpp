@@ -9,7 +9,7 @@ using namespace std;
 //NON-Recursive Version of TSP
 
 //number of nodes (including node 0) (n > 1)
-const int n = 4;
+const int n = 6;
 
 //Matrix in textbook
 /*	int adjMat[n][n] = {
@@ -21,14 +21,14 @@ const int n = 4;
 */
 
 //calculate different combos (creating combo list)
-void com(vector<vector<int>> &list, int n, int iters) {
+void com(vector<vector<int> > &list, int n, int iters) {
 	for (int i = 0; i < iters; i++) {
 		vector<int>::iterator iter = list[i].begin();
 		list[i].insert(iter + (i%n), n);
 	}
 }
 //adjacency matrix, combination list		, iteration of combo list, this path 
-int DFS(int adjMat[n][n], vector<vector<int>> comList, int i) {
+int DFS(int adjMat[n][n], vector<vector<int> > comList, int i) {
 	int sum = 0;
 	for (int j = 0; j < n; j++) {
 		sum += adjMat[comList[i][j]][comList[i][j + 1]];
@@ -38,6 +38,7 @@ int DFS(int adjMat[n][n], vector<vector<int>> comList, int i) {
 
 
 int main() {
+	MPI_Comm comm;
 	MPI_Init(NULL, NULL);
 	int world_size;
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
@@ -45,7 +46,6 @@ int main() {
 	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 	int *sums = (int *)malloc(sizeof(int) * world_size);
 	vector<int> *paths = (vector<int> *)malloc(sizeof(vector<int>) * world_size);
-	MPI_Comm comm;
 	srand(150);
 
 	int adjMat[n][n];
@@ -62,16 +62,12 @@ int main() {
 		}
 	}
 
-	printf("rank %d out of %d processors\n", world_rank, world_size);
+//	printf("rank %d out of %d processors\n", world_rank, world_size);
 	int tid, nthreads;
-	clock_t begin = clock();
+//	clock_t begin = clock();
 	vector<int> shortestPath;
 	int smallestSum = std::numeric_limits<int>::max(); //max int value
 	int sum;
-#pragma omp parallel private(nthreads, tid)
-	{
-		tid = omp_get_thread_num();
-		nthreads = omp_get_num_threads();
 		//calculate amount of different combos in TSP (n! number of iterations)
 
 		int iters = 1;
@@ -106,7 +102,12 @@ int main() {
 
 
 
-		for (unsigned int i = (nthreads * world_rank) + tid ; i < comList.size(); i += (nthreads * world_size)) {
+#pragma omp parallel private(nthreads, tid)
+	{
+		tid = omp_get_thread_num();
+		nthreads = omp_get_num_threads();
+
+        for (unsigned int i = (nthreads * world_rank) + tid ; i < comList.size(); i += (nthreads * world_size)) {
 			//adjancecy matrix, combo list, iteration in combo list,
 			sum = DFS(adjMat, comList, i);
 			/*
@@ -119,35 +120,38 @@ int main() {
 				shortestPath = comList[i];
 			}
 		}
-		printf("Thread %d of %d completed\n", tid, nthreads);
-	}
-	MPI_Gather(&sums, 1, MPI_INT, &smallestSum, 1, MPI_INT, MPI_COMM_WORLD,comm);
-	int lowest = std::numeric_limits<int>::max();
-	if (world_rank == 0) {
-		int sumOfAll = std::numeric_limits<int>::max(); //max int value
-		
-		for (int i = 0; i < world_rank; i++) {
-			//TODO: Check if sumOfAll > sum[i] and then make 
-			if (sums[i] < sumOfAll) {
-				lowest = i;
-				sumOfAll = sums[i];
-			}
-		}
+	//	printf("Thread %d of %d completed\n", tid, nthreads);
+    }
+	unsigned int lowest = n;
+	MPI_Gather(&sums, 1, MPI_INT, &smallestSum, 1, MPI_INT, 0,MPI_COMM_WORLD);
+	int sumOfAll = 30 * (n + 2); //an impossible value
+	if(world_rank == 0){
+	    for (int i = 0; i < world_size; i++) {
+		    if (sums[i] < sumOfAll) {
+		        lowest = i;
+                sumOfAll = sums[i];
+		    }
+	    }
+        MPI_Bcast(&lowest, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    }
+   if(world_rank != 0){
+    MPI_Recv(&lowest, 1, MPI_INT,0 , 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+   }
 
-	cout << "\nLowest Sum: " << sumOfAll << endl;;
-	}
+	cout << "\nLowest Sum: ";
+	
 	if(world_rank == lowest){
-	cout << "Shortest Path: ";
+        cout<<smallestSum<<endl;
+	    cout << "Shortest Path: ";
 	for (unsigned int i = 0; i < shortestPath.size(); i++) {
 		cout << shortestPath[i] << ", ";
 	}
 	}
 
-	clock_t end = clock();
-	cout << "Clock: " << ((float)(end - begin) / CLOCKS_PER_SEC) << endl;
+	//clock_t end = clock();
+	//cout << "Clock: " << ((float)(end - begin) / CLOCKS_PER_SEC) << endl;
 
 	MPI_Finalize();
-	cin.ignore();
 	//Pause
 	return 0;
 }
