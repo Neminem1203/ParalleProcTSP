@@ -6,7 +6,7 @@
 using namespace std;
 
 const int seed = time(NULL); //use a constant number for constant results
-const int n = 9; //number of nodes > 2
+const int n = 8; //number of nodes > 2 and nodes < 9
 const int greatestValue= 30; //greatest value of srand
 
 //makes all different combinations
@@ -99,13 +99,22 @@ int main(int argc, char * argv[]){
     MPI_Gather(&smallestSum, 1, MPI_INT, sums, 1 , MPI_INT, 0, MPI_COMM_WORLD);
     int sSOA = 30 * (n + 1) + 1; //smallestSumOfAll
     if(world_rank == 0){
-    //check which is the smallest sum of all of the nodes
-    for(int i = 0; i < world_size; i++){
-        if(sums[i] < sSOA){
-            lowest = i;
-            sSOA = sums[i];
+        //check which is the smallest sum of all of the nodes
+        for(int i = 0; i < world_size; i++){
+            if(sums[i] < sSOA){
+                lowest = i;
+                sSOA = sums[i];
+            }
         }
-    }
+        //print out the adjMat
+        
+        for(int i = 0; i < n; i++){
+            for(int j = 0; j < n; j++){
+                cout<<adjMat[i][j]<<"\t";
+            }
+            cout<<"\n";
+        }
+        cout<<"\n";
         //send to all the nodes which of the nodes contain the lowest sum
         for(int i = 1; i < world_size; i++){
             MPI_Send(&lowest, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
